@@ -7,23 +7,34 @@ interface BarcodeScannerProps {
 
 const BarcodeScanZX: React.FC<BarcodeScannerProps> = ({ onDecode }) => {
 	const videoRef = useRef<HTMLVideoElement>(null);
-	const [scanning, setScanning] = useState(false);
+	const [scanning, setScanning] = useState(true);
+
+	const codeReader = useRef(new BrowserMultiFormatReader());
+	const stream = useRef<MediaStream | null>(null);
+
+	const stopScanning = () => {
+		codeReader.current.reset();
+		if (stream.current) {
+			stream.current.getTracks().forEach((track) => track.stop());
+		}
+		setScanning(false);
+	};
 
 	useEffect(() => {
-		const codeReader = new BrowserMultiFormatReader();
-
 		const accessCamera = async () => {
 			try {
-				const stream = await navigator.mediaDevices.getUserMedia({
+				stream.current = await navigator.mediaDevices.getUserMedia({
 					video: { facingMode: "environment" },
 				});
 
 				if (videoRef.current) {
-					videoRef.current.srcObject = stream;
+					videoRef.current.srcObject = stream.current;
 					videoRef.current.setAttribute("playsinline", "true");
-					videoRef.current.play();
-
-					startScanning();
+					videoRef.current.setAttribute("autoplay", "true");
+					videoRef.current.onplay = () => {
+						console.log("Video is playing");
+						startScanning();
+					};
 				}
 			} catch (err) {
 				console.error("Error accessing camera: ", err);
@@ -31,7 +42,7 @@ const BarcodeScanZX: React.FC<BarcodeScannerProps> = ({ onDecode }) => {
 		};
 
 		const startScanning = () => {
-			codeReader
+			codeReader.current
 				.decodeFromVideoElement(videoRef.current!)
 				.then((result) => {
 					onDecode(result.getText());
@@ -44,15 +55,13 @@ const BarcodeScanZX: React.FC<BarcodeScannerProps> = ({ onDecode }) => {
 
 		accessCamera();
 
-		return () => {
-			// Cleanup on unmount (stop any ongoing scan)
-			codeReader.reset();
-		};
+		return () => {};
 	}, []);
 
 	return (
-		<div>
+		<div style={{ display: "flex", flexDirection: "column" }}>
 			<video ref={videoRef} style={{ width: "320px", height: "240px" }} />
+			<button onClick={stopScanning}>Turn Off Camera</button>
 		</div>
 	);
 };
